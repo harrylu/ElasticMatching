@@ -4,10 +4,10 @@ import math
 
 # xs, ys are 1 dimensional arrays
 # xlim, ylim are 2-tuples (min, max)
-def plot_coordinates(xs, ys, xlim, ylim, fig = None):
+def plot_coordinates(xs, ys, xlim, ylim, fig = None, **scatter_kwargs):
     fig = plt.figure() if fig is None else fig
     ax = plt.gca()
-    ax.scatter(xs, ys)
+    ax.scatter(xs, ys, **scatter_kwargs)
     ax.set(xlim=xlim, ylim=ylim, aspect='equal')
 
     # Set bottom and left spines as x and y axes of coordinate system
