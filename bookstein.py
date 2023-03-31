@@ -52,4 +52,6 @@ if __name__ == "__main__":
 
     plt.show()
 
-
+# returns square procustes distance
+def sqr_procrustes(A, B):
+    return np.sum(np.square(A-B))
