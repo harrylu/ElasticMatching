@@ -27,33 +27,39 @@ class ShapeTree:
             ret.right = self.create_subtree(midpoint, subcurve_end)
         return ret
     
-    # in-order dft
+    # in-order depth-first traversal
+    # non-destructive; ShapeTree instance is unchanged
+    # calls alter_midpoint_bookstein_callback with arg midpoint_bookstein before converting to global coords
+    # calls midpoint_global_inorder_callback with arg midpoint_global in order of in-order traversal
     @staticmethod
-    def traverse_subtree(sub_root, subcurve_start_point, subcurve_end_point, callback=None):
+    def traverse_subtree(sub_root, subcurve_start_point, subcurve_end_point, alter_midpoint_bookstein_callback=None, midpoint_global_inorder_callback=None):
         if sub_root is None:
-            return []
+            return
+        
+        midpoint_bookstein = sub_root.midpoint_bookstein
+        if alter_midpoint_bookstein_callback is not None:
+            midpoint_bookstein = alter_midpoint_bookstein_callback(midpoint_bookstein)
+        
+        # we transform the bookstein midpoint back to global coords by inverting with respect to the curve start and end points
         c, A, b = bookstein.get_bookstein_transformation_2d(subcurve_start_point, subcurve_end_point)
         c_inv, A_inv = c**-1, np.linalg.inv(A)
+        midpoint_global = c_inv * (A_inv @ midpoint_bookstein) + b
 
-        midpoint_bookstein = sub_root.midpoint_bookstein
-        if callback is not None:
-            midpoint_bookstein = callback(midpoint_bookstein)
-
-        # we transform the bookstein midpoint back to global coords by inverting the transformation
-        midpoint = c_inv * (A_inv @ midpoint_bookstein) + b
-
-        ret = []
-        ret.extend(ShapeTree.traverse_subtree(sub_root.left, subcurve_start_point, midpoint))
-        ret.append(midpoint)
-        ret.extend(ShapeTree.traverse_subtree(sub_root.right, midpoint, subcurve_end_point))
-        
-        return ret
+        # in-order traversal
+        ShapeTree.traverse_subtree(sub_root.left, subcurve_start_point, midpoint_global, alter_midpoint_bookstein_callback, midpoint_global_inorder_callback)
+        midpoint_global_inorder_callback(midpoint_global)
+        ShapeTree.traverse_subtree(sub_root.right, midpoint_global, subcurve_end_point, alter_midpoint_bookstein_callback, midpoint_global_inorder_callback)
 
     # callback is called on every bookstein coordinate with point as arg
     # returns 2 x n matrix
     # reconstructs the curve relative to first and last points
-    def get_global_coords(self, first_point, last_point, callback=None):
-        coords = self.traverse_subtree(self.root, first_point, last_point, callback)
+    def get_global_coords(self, first_point, last_point, alter_midpoint_bookstein_callback=None):
+        coords = []
+        def midpoint_global_inorder_callback(midpoint_global):
+            coords.append(midpoint_global)
+        self.traverse_subtree(self.root, first_point, last_point,
+                              alter_midpoint_bookstein_callback=alter_midpoint_bookstein_callback,
+                              midpoint_global_inorder_callback=midpoint_global_inorder_callback)
         return np.hstack([first_point] + coords + [last_point])
     
 
@@ -63,7 +69,7 @@ if __name__ == "__main__":
     import plt_utils
 
     # test that we can recover points from shape tree
-    num_pts = np.random.randint(10, 16)
+    num_pts = np.random.randint(20, 30)
     print(f"Number input points: {num_pts}")
     pts = np.array([[np.random.random()*20 - 10 for _ in range(num_pts)],
                     [np.random.random()*20 - 10 for _ in range(num_pts)]])

@@ -15,7 +15,8 @@ if __name__ == "__main__":
 
     # plot with noise applied to bookstein coordinates
     sigma = 1
-    coords = shape_tree.get_global_coords(pts[:, [0]], pts[:, [-1]], callback=lambda pt: pt + .1*np.array([[np.random.normal(0, sigma), np.random.normal(0, sigma)]]).T)
+    coords = shape_tree.get_global_coords(pts[:, [0]], pts[:, [-1]],
+                                          alter_midpoint_bookstein_callback=lambda pt: pt + .1*np.array([[np.random.normal(0, sigma), np.random.normal(0, sigma)]]).T)
     xs, ys = np.split(coords, 2, 0)
     xs, ys = xs.flatten(), ys.flatten()
     fig, ax = plt.subplots()
