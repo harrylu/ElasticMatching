@@ -12,6 +12,7 @@ if __name__ == "__main__":
     plt.show()
     pts = np.vstack(line.get_xydata()).T
     shape_tree = ShapeTree(pts)
+    print(pts)
 
     # plot with noise applied to bookstein coordinates
     sigma = 1
