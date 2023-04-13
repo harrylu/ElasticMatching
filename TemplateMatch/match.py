@@ -22,6 +22,7 @@ def event_distance(e_A, e_B, e_A1, e_B1, weights):
 # skip A = missing penalty; skip B = spurious penalty
 # paper sets missing penalty = spurious penalty, so we do the same
 # we only want 1 stroke, so we dont use stroke count difference penalty
+# returns cost of matching
 def match(A, B, penalty, weights):
     # D is dp array
     D = np.empty((A.shape[1], B.shape[1]))
@@ -42,6 +43,65 @@ def match(A, B, penalty, weights):
     dist = D[D.shape[0] - 1, D.shape[1] - 1]
     final_dist = dist**2 / (penalty * A.shape[1] + penalty * B.shape[1])
     return final_dist
+
+
+# returns cost, matched_A, matched_B (matched_A_i, matched_B_i correspond to points at index i of A, B and make up a matched pair)
+# points are columns of the 2 X N matrices
+def visualize_match(A, B, penalty, weights):
+    # copied code of match, but oh well
+    def inner_match():
+        # D is dp array
+        D = np.empty((A.shape[1], B.shape[1]))
+        D_matched_A = np.empty((A.shape[1], B.shape[1]), dtype=object)
+        D_matched_B = np.empty((A.shape[1], B.shape[1]), dtype=object)
+        D[0, 0] = 0
+        D_matched_A[0, 0] = []
+        D_matched_B[0, 0] = []
+        for i in range(1, D.shape[0]):
+            D[i, 0] = D[i - 1, 0] + penalty
+            D_matched_A[i, 0] = []
+            D_matched_B[i, 0] = []
+        for j in range(1, D.shape[1]):
+            D[0, j] = D[0, j - 1] + penalty
+            D_matched_B[0, j] = []
+            D_matched_A[0, j] = []
+
+        # first events
+        e_A1, e_B1 = A[:, [1]], B[:, [1]]
+        for i in range(1, D.shape[0]):
+            for j in range(1, D.shape[1]):
+                e_A, e_B = A[:, [i]], B[:, [j]]
+                match_events = D[i - 1, j - 1] + event_distance(e_A, e_B, e_A1, e_B1, weights)
+                skip_A = D[i - 1, j] + penalty
+                skip_B = D[i, j - 1] + penalty
+                skip_both = D[i - 1, j - 1] + 2 * penalty
+                D[i, j] = min(match_events, skip_A, skip_B, skip_both)
+                # This won't work; counts too many edges; we need way to only get pairs from the min path to D[N, N]
+                print(i, j)
+                lowest = D[i, j]
+                if lowest == match_events:
+                    D_matched_A[i, j] = D_matched_A[i - 1, j - 1].copy()
+                    D_matched_B[i, j] = D_matched_B[i - 1, j - 1].copy()
+                    D_matched_A[i, j].append(i)
+                    D_matched_B[i, j].append(j)
+                elif lowest == skip_A:
+                    D_matched_A[i, j] = D_matched_A[i - 1, j].copy()
+                    D_matched_B[i, j] = D_matched_B[i - 1, j].copy()
+                elif lowest == skip_B:
+                    D_matched_A[i, j] = D_matched_A[i, j - 1].copy()
+                    D_matched_B[i, j] = D_matched_B[i, j - 1].copy()
+                elif lowest == skip_both:
+                    D_matched_A[i, j] = D_matched_A[i - 1, j - 1].copy()
+                    D_matched_B[i, j] = D_matched_B[i - 1, j - 1].copy()
+                else:
+                    raise Exception("What the heck")
+        dist = D[D.shape[0] - 1, D.shape[1] - 1]
+        final_dist = dist**2 / (penalty * A.shape[1] + penalty * B.shape[1])
+        return final_dist, D_matched_A[-1, -1], D_matched_B[-1, -1]
+    
+    cost, matched_A, matched_B  = inner_match()
+    return cost, matched_A, matched_B
+
 
 if __name__ == "__main__":
     import time
@@ -70,11 +130,14 @@ if __name__ == "__main__":
 
 
     # test with self-draw
+    DRAW_PRECISION = 0.3
+    GRAPH_DIM = 10
+
     fig, ax = plt.subplots()
     ax.set_title('click to build line segments')
     line1, = ax.plot([], [])  # empty line
-    ax.set_xlim(-10,10); ax.set_ylim(-10,10)
-    linebuilder = plt_utils.LineBuilder(line1, 0.1)
+    ax.set_xlim(-GRAPH_DIM,GRAPH_DIM); ax.set_ylim(-GRAPH_DIM,GRAPH_DIM)
+    linebuilder = plt_utils.LineBuilder(line1, DRAW_PRECISION)
     plt.show()
     line1_data = line1.get_xydata()
     pts = np.vstack(line1_data).T
@@ -89,8 +152,8 @@ if __name__ == "__main__":
     ax.set_title('click to build line segments')
     line1, = ax.plot(line1_data[:, [0]], line1_data[:, [1]])  # plot line1
     line2, = ax.plot([], [])
-    ax.set_xlim(-10,10); ax.set_ylim(-10,10)
-    linebuilder = plt_utils.LineBuilder(line2, 0.1)
+    ax.set_xlim(-GRAPH_DIM,GRAPH_DIM); ax.set_ylim(-GRAPH_DIM,GRAPH_DIM)
+    linebuilder = plt_utils.LineBuilder(line2, DRAW_PRECISION)
     plt.show()
     line2_data = line2.get_xydata()
     pts2 = np.vstack(line2_data).T
@@ -100,9 +163,28 @@ if __name__ == "__main__":
     pts2 = np.vstack((pts2, get_curvature(pts2)))
 
     timer = time.time()
-    cost = match(pts, pts2, 100, (.1, .1, .1))
+    cost, matched_A, matched_B = visualize_match(pts, pts2, 100, (.1, .1, .1))
     print(f"Time Elapsed: {time.time() - timer} s")
     print(f"Cost: {cost}")
+
+    fig, ax = plt.subplots()
+    line1, = ax.plot(line1_data[:, [0]], line1_data[:, [1]])  # plot line1
+    line2, = ax.plot(line2_data[:, [0]], line2_data[:, [1]])  # plot line2
+    ax.scatter(line1_data[:, [0]], line1_data[:, [1]])  # plot line1 pts
+    ax.scatter(line2_data[:, [0]], line2_data[:, [1]])  # plot line2 pts
+    ax.set_xlim(-10,10); ax.set_ylim(-10,10)
+    # 2 x N arrays of points
+    line_starts = np.vstack([line1_data[i, :] for i in matched_A]).T
+    line_ends = np.vstack([line2_data[i, :] for i in matched_B]).T
+    # xx is 2 x N array of paired up x-coords, yy is same for y-coords
+    xx = np.vstack([line_starts[0].T, line_ends[0].T])
+    yy = np.vstack([line_starts[1].T, line_ends[1].T])
+    plt.plot(xx, yy)
+    plt.show()
+    
+
+
+
 
 #     a_str = """(0, 0, 223), (!2,!1, 223), (!1, 2, 223), (0, 5, 182), (1, 9, 194), (3, 13, 193), (5, 16, 190), (7, 19, 201), (10, 22, 239), (14, 24, 289), (16, 21, 261),
 # (16, 17, 196), (16, 13, 180), (16, 9, 188), (16, 5, 189), (15, 1, 182), (15,!2, 187), (14,!5, 178), (13,!9, 172), (13,!13, 187), (12,!17, 193),
