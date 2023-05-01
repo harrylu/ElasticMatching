@@ -1,5 +1,5 @@
 import numpy as np
-
+import resample
 # e is 3 x 1 column vector of (x, y, theta)
 # weights is 3-tuple (alpha, beta, gamma) that weights x, y, theta distance
 # paper recommends large theta weight
@@ -76,8 +76,6 @@ def visualize_match(A, B, penalty, weights):
                 skip_B = D[i, j - 1] + penalty
                 skip_both = D[i - 1, j - 1] + 2 * penalty
                 D[i, j] = min(match_events, skip_A, skip_B, skip_both)
-                # This won't work; counts too many edges; we need way to only get pairs from the min path to D[N, N]
-                print(i, j)
                 lowest = D[i, j]
                 if lowest == match_events:
                     D_matched_A[i, j] = D_matched_A[i - 1, j - 1].copy()
@@ -96,7 +94,7 @@ def visualize_match(A, B, penalty, weights):
                 else:
                     raise Exception("What the heck")
         dist = D[D.shape[0] - 1, D.shape[1] - 1]
-        final_dist = dist**2 / (penalty * A.shape[1] + penalty * B.shape[1])
+        final_dist = dist
         return final_dist, D_matched_A[-1, -1], D_matched_B[-1, -1]
     
     cost, matched_A, matched_B  = inner_match()
@@ -130,36 +128,44 @@ if __name__ == "__main__":
 
 
     # test with self-draw
-    DRAW_PRECISION = 0.3
+    DRAW_PRECISION = 0.1
     GRAPH_DIM = 10
 
     fig, ax = plt.subplots()
+    ax.invert_yaxis()
     ax.set_title('click to build line segments')
     line1, = ax.plot([], [])  # empty line
     ax.set_xlim(-GRAPH_DIM,GRAPH_DIM); ax.set_ylim(-GRAPH_DIM,GRAPH_DIM)
     linebuilder = plt_utils.LineBuilder(line1, DRAW_PRECISION)
     plt.show()
-    line1_data = line1.get_xydata()
-    pts = np.vstack(line1_data).T
-    # translate points such that the first point is at origin
-    first = pts[:, [0]]
-    pts -= np.tile(first, pts.shape[1])
-    # include angle curvature information
-    pts = np.vstack((pts, get_curvature(pts)))
     
     
     fig, ax = plt.subplots()
+    ax.invert_yaxis()
     ax.set_title('click to build line segments')
+    line1_data = line1.get_xydata()
     line1, = ax.plot(line1_data[:, [0]], line1_data[:, [1]])  # plot line1
     line2, = ax.plot([], [])
     ax.set_xlim(-GRAPH_DIM,GRAPH_DIM); ax.set_ylim(-GRAPH_DIM,GRAPH_DIM)
     linebuilder = plt_utils.LineBuilder(line2, DRAW_PRECISION)
     plt.show()
+
+    # get pts data from lines
+
+    pts = np.vstack(line1_data).T
+    # translate points such that the first point is at origin
+    first = pts[:, [0]]
+    pts -= np.tile(first, pts.shape[1])
+    pts = resample.resample(pts, 0.5)
+    # include angle curvature information
+    pts = np.vstack((pts, get_curvature(pts)))
+    
     line2_data = line2.get_xydata()
     pts2 = np.vstack(line2_data).T
     # translate points such that the first point is at origin
     first = pts2[:, [0]]
     pts2 -= np.tile(first, pts2.shape[1])
+    pts2 = resample.resample(pts2, 0.5)
     pts2 = np.vstack((pts2, get_curvature(pts2)))
 
     timer = time.time()
@@ -168,14 +174,15 @@ if __name__ == "__main__":
     print(f"Cost: {cost}")
 
     fig, ax = plt.subplots()
-    line1, = ax.plot(line1_data[:, [0]], line1_data[:, [1]])  # plot line1
-    line2, = ax.plot(line2_data[:, [0]], line2_data[:, [1]])  # plot line2
-    ax.scatter(line1_data[:, [0]], line1_data[:, [1]])  # plot line1 pts
-    ax.scatter(line2_data[:, [0]], line2_data[:, [1]])  # plot line2 pts
-    ax.set_xlim(-10,10); ax.set_ylim(-10,10)
+    # ax.invert_yaxis()
+    line1, = ax.plot(pts[0, :], pts[1, :])  # plot line1
+    line2, = ax.plot(pts2[0, :], pts2[1, :])  # plot line2
+    ax.scatter(pts[0, :], pts[1, :])  # plot line1 pts
+    ax.scatter(pts2[0, :], pts2[1, :])  # plot line2 pts
+    # ax.set_xlim(-20,20); ax.set_ylim(-20,20)
     # 2 x N arrays of points
-    line_starts = np.vstack([line1_data[i, :] for i in matched_A]).T
-    line_ends = np.vstack([line2_data[i, :] for i in matched_B]).T
+    line_starts = np.vstack([pts[:, i] for i in matched_A]).T
+    line_ends = np.vstack([pts2[:, i] for i in matched_B]).T
     # xx is 2 x N array of paired up x-coords, yy is same for y-coords
     xx = np.vstack([line_starts[0].T, line_ends[0].T])
     yy = np.vstack([line_starts[1].T, line_ends[1].T])
